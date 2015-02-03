@@ -17,6 +17,23 @@ module OkHbase
           limit: nil,
       }.freeze
 
+      SCANNER2_DEFAULTS = {
+          start_row: nil,
+          stop_row: nil,
+          columns: nil,
+          caching: 100,
+          max_versions: 1,
+          time_range: nil,
+      }.freeze
+
+      GETTER_DEFAULTS = {
+          row: nil,
+          columns: nil,
+          timestamp: nil,
+          time_range: nil,
+          max_versions: 1,
+      }.freeze
+
       attr_accessor :table_name, :connection
 
       def table_name
@@ -128,7 +145,6 @@ module OkHbase
         opts[:start_row] ||= ''
 
         scanner = _scanner(opts)
-
         scanner_id = self.connection.client.scannerOpenWithScan(self.connection.table_name(table_name), scanner, {})
 
         fetched_count = returned_count = 0
@@ -162,6 +178,45 @@ module OkHbase
         rows
       end
 
+      def scan2(opts={})
+        opts[:columns] = _tcolumn(opts[:columns]) rescue nil
+        opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
+        rows2 = [] unless block_given?
+        opts = SCANNER2_DEFAULTS.merge opts.select { |k| SCANNER2_DEFAULTS.keys.include? k }
+
+        raise ArgumentError.new "'caching' must be >= 1" unless opts[:caching] && opts[:caching] >= 1
+        raise ArgumentError.new "'max_versions' must be >= 1" if opts[:max_versions] && opts[:max_versions] < 1
+
+        scanner2 = _scanner2(opts)
+
+        scanner_id = self.connection.client2.openScanner(self.connection.table_name(table_name), scanner2)
+
+        fetched_count = returned_count = 0
+
+        begin
+          while true
+            how_many = opts[:max_versions] ? [opts[:caching], opts[:max_versions] - returned_count].min : opts[:caching]
+
+            items = self.connection.client2.getScannerRows(scanner_id, how_many)
+
+            fetched_count += items.length
+            items.map.with_index do |item, index|
+              if block_given?
+                yield item.row, _make_row2(item.columnValues)
+              else
+                rows2 << [item.row, _make_row2(item.columnValues)]
+              end
+              return rows2 if opts[:limit] && index + 1 + returned_count == opts[:limit]
+            end
+
+            break if items.length < how_many
+          end
+        ensure
+          self.connection.client2.closeScanner(scanner_id)
+        end
+        rows2
+      end
+
       def put(row_key, data, timestamp = nil)
         batch = self.batch(timestamp)
 
@@ -180,6 +235,22 @@ module OkHbase
         else
           timestamp ? self.connection.client.deleteAllRowTs(self.connection.table_name(table_name), row_key, timestamp, {}) : self.connection.client.deleteAllRow(self.connection.table_name(table_name), row_key, {})
         end
+      end
+
+      def get(opts={})
+        opts[:columns] = _tcolumn(opts[:columns]) rescue nil
+        opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
+        opts = GETTER_DEFAULTS.merge opts.select { |k| GETTER_DEFAULTS.keys.include? k }
+        
+        getter = _getter(opts)
+                
+        item = self.connection.client2.get(table_name,getter)
+        if block_given?
+          yield item.row, _make_row2(item.columnValues)
+        else
+          single_row = [item.row, _make_row2(item.columnValues)]
+        end
+        return single_row
       end
 
       def batch(timestamp = nil, batch_size = nil, transaction = false)
@@ -226,16 +297,32 @@ module OkHbase
         opts.each_pair do |k, v|
           const = k.to_s.upcase.gsub('_', '')
           const_value = Apache::Hadoop::Hbase::Thrift::TScan.const_get(const) rescue nil
-
           if const_value
             v.force_encoding(Encoding::UTF_8) if v.is_a?(String)
-            OkHbase.logger.info "setting scanner.#{scanner_fields[const_value][:name]}: #{v}"
+          #  OkHbase.logger.info "setting scanner.#{scanner_fields[const_value][:name]}: #{v}"
             scanner.send("#{scanner_fields[const_value][:name]}=", v)
           else
           end
         end
         scanner
 
+      end
+
+      def _scanner2(opts)
+        scanner2 = Apache::Hadoop::Hbase::Thrift2::TScan.new()
+        scanner_fields = Apache::Hadoop::Hbase::Thrift2::TScan::FIELDS
+
+        opts.each_pair do |k, v|
+          const = k.to_s.upcase.gsub('_', '')
+          const_value = Apache::Hadoop::Hbase::Thrift2::TScan.const_get(const) rescue nil
+
+          if const_value
+            v.force_encoding(Encoding::UTF_8) if v.is_a?(String)
+            scanner2.send("#{scanner_fields[const_value][:name]}=", v)
+          else
+          end
+        end
+        scanner2
       end
 
       def _make_row(cell_map, include_timestamp)
@@ -246,9 +333,47 @@ module OkHbase
         row
       end
 
+      def _make_row2(cell_maps)
+        row = []
+        cell_maps.each do |cell_map|
+          row << {family: cell_map.family, qualifier: cell_map.qualifier, value: cell_map.value, timestamp: cell_map.timestamp}
+        end
+        row
+      end
+
+      def _ttimerange(time_range)
+        time_range = {minStamp: time_range[0], maxStamp: time_range[1]}
+        ttimerange = Apache::Hadoop::Hbase::Thrift2::TTimeRange.new(time_range)
+        ttimerange
+      end
+
       def _new_increment(args)
         args[:table] = self.table_name
         args
+      end
+
+      def _getter(opts)
+        getter = Apache::Hadoop::Hbase::Thrift2::TGet.new()
+        getter_fields = Apache::Hadoop::Hbase::Thrift2::TGet::FIELDS
+
+        opts.each_pair do |k, v|
+          const = k.to_s.upcase.gsub('_', '')
+          const_value = Apache::Hadoop::Hbase::Thrift2::TGet.const_get(const) rescue nil
+
+          if const_value
+            v.force_encoding(Encoding::UTF_8) if v.is_a?(String)
+            getter.send("#{getter_fields[const_value][:name]}=", v)
+          else
+          end
+        end
+        puts getter
+        getter
+      end
+
+      def _tcolumn(opts)
+        tcolumn = Apache::Hadoop::Hbase::Thrift2::TColumn.new(opts)
+        atcolumn = []
+        atcolumn << tcolumn
       end
     end
   end

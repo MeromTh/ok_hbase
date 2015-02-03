@@ -3,6 +3,7 @@ require 'thrift/transport/socket'
 require 'thrift/protocol/binary_protocol'
 
 require 'thrift/hbase'
+require 'thrift2/t_h_base_service'
 
 require 'ok_hbase/client'
 
@@ -27,7 +28,7 @@ module OkHbase
     }
 
     attr_accessor :host, :port, :timeout, :auto_connect, :table_prefix, :table_prefix_separator, :max_tries
-    attr_reader :client
+    attr_reader :client, :client2
 
     def initialize(opts={})
       opts = DEFAULT_OPTS.merge opts
@@ -151,14 +152,15 @@ module OkHbase
       increments.map! { |i| _new_increment(i) }
       client.incrementRows(increments)
     end
-
+   
     private
 
     def _refresh_thrift_client
-      socket = Thrift::Socket.new(host, port, timeout)
+      socket = Thrift::Socket.new(@host, @port, @timeout)
       @transport = @transport_class.new(socket)
       protocol = Thrift::BinaryProtocolAccelerated.new(@transport)
-      @client = OkHbase::Client.new(protocol, nil, max_tries)
+      @client = OkHbase::Client.new(protocol, nil, @max_tries)
+      @client2 = OkHbase::Client2.new(protocol, nil, @max_tries)
     end
 
     def _new_increment(args)

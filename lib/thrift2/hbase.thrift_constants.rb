@@ -5,12 +5,12 @@
 #
 
 require 'thrift'
-require_relative 'hbase.thrift_types.rb'
+require_relative 'hbase.thrift_types'
 
 module Apache
   module Hadoop
     module Hbase
-      module Thrift
+      module Thrift2
       end
     end
   end
