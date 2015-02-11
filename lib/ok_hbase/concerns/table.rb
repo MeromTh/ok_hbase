@@ -14,7 +14,7 @@ module OkHbase
           timestamp: nil,
           include_timestamp: false,
           caching: 1000,
-          limit: nil,
+          limit: nil
       }.freeze
 
       SCANNER2_DEFAULTS = {
@@ -23,15 +23,21 @@ module OkHbase
           columns: nil,
           caching: 100,
           max_versions: 1,
-          time_range: nil,
+          time_range: nil
       }.freeze
 
-      GETTER_DEFAULTS = {
+      TGET_DEFAULTS = {
           row: nil,
           columns: nil,
           timestamp: nil,
           time_range: nil,
-          max_versions: 1,
+          max_versions: 1
+      }.freeze
+
+      TCOLUMN_DEFAULTS = {
+          family: nil,
+          qualifier: nil,
+          timestamp: nil
       }.freeze
 
       attr_accessor :table_name, :connection
@@ -179,10 +185,10 @@ module OkHbase
       end
 
       def scan2(opts={})
-        
+
         raise TypeError.new "'columns' must be a list" if opts[:columns] && !opts[:columns].is_a?(Array)
         raise TypeError.new "'time_range' must be a list" if opts[:time_range] && !opts[:time_range].is_a?(Array)
-        
+
         opts[:columns] = _tcolumn(opts[:columns]) rescue nil
         opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
         rows2 = [] unless block_given?
@@ -242,23 +248,56 @@ module OkHbase
       end
 
       def get(opts={})
-        
+
         raise TypeError.new "'columns' must be a list" if opts[:columns] && !opts[:columns].is_a?(Array)
         raise TypeError.new "'time_range' must be a list" if opts[:time_range] && !opts[:time_range].is_a?(Array)
-        
+
         opts[:columns] = _tcolumn(opts[:columns]) rescue nil
         opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
-        opts = GETTER_DEFAULTS.merge opts.select { |k| GETTER_DEFAULTS.keys.include? k }
-        
-        getter = _getter(opts)
+        opts = TGET_DEFAULTS.merge opts.select { |k| TGET_DEFAULTS.keys.include? k }
+        tget = _tget(opts)
                 
-        item = self.connection.client2.get(table_name,getter)
+        item = self.connection.client2.get(self.connection.table_name(table_name), tget)
         if block_given?
           yield item.row, _make_row2(item.columnValues)
         else
           single_row = [item.row, _make_row2(item.columnValues)]
         end
         return single_row
+      end
+
+      def gets(opts={})
+
+        raise TypeError.new "'rows' must be a list" if opts[:rows] && !opts[:rows].is_a?(Array)
+        raise TypeError.new "'columns' must be a list" if opts[:columns] && !opts[:columns].is_a?(Array)
+        raise TypeError.new "'time_range' must be a list" if opts[:time_range] && !opts[:time_range].is_a?(Array)
+
+        opts[:columns] = _tcolumn(opts[:columns]) rescue nil
+        opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
+        
+        opts_mod = opts.clone
+        opts_mod[:row] = nil
+
+        opts_mod = TGET_DEFAULTS.merge opts_mod.select { |k| TGET_DEFAULTS.keys.include? k }
+
+        ltget = Array.new(opts[:row].count) { opts_mod.clone }
+        opts[:row].map.with_index{ |row, index| ltget[index][:row] = row }
+
+        opts_return = []
+        ltget.each do |ltget_single|
+          opts_return << _tget(ltget_single)
+        end
+        items = self.connection.client2.getMultiple(self.connection.table_name(table_name), opts_return)
+        
+        rows = []
+        items.map.with_index do |item, index|
+          if block_given?
+            yield item.row, _make_row2(item.columnValues)
+          else
+            rows << [item.row, _make_row2(item.columnValues)]
+          end
+        end
+        rows
       end
 
       def batch(timestamp = nil, batch_size = nil, transaction = false)
@@ -360,9 +399,9 @@ module OkHbase
         args
       end
 
-      def _getter(opts)
-        getter = Apache::Hadoop::Hbase::Thrift2::TGet.new()
-        getter_fields = Apache::Hadoop::Hbase::Thrift2::TGet::FIELDS
+      def _tget(opts)
+        tget = Apache::Hadoop::Hbase::Thrift2::TGet.new()
+        tget_fields = Apache::Hadoop::Hbase::Thrift2::TGet::FIELDS
 
         opts.each_pair do |k, v|
           const = k.to_s.upcase.gsub('_', '')
@@ -370,11 +409,11 @@ module OkHbase
 
           if const_value
             v.force_encoding(Encoding::UTF_8) if v.is_a?(String)
-            getter.send("#{getter_fields[const_value][:name]}=", v)
+            tget.send("#{tget_fields[const_value][:name]}=", v)
           else
           end
         end
-        getter
+        tget
       end
 
       def _tcolumn(opts)
