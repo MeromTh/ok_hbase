@@ -366,14 +366,17 @@ module OkHbase
           else
           end
         end
-        puts getter
         getter
       end
 
       def _tcolumn(opts)
-        tcolumn = Apache::Hadoop::Hbase::Thrift2::TColumn.new(opts)
         atcolumn = []
-        atcolumn << tcolumn
+        opts.each do |opt|
+          opt = TCOLUMN_DEFAULTS.merge opt.select { |k| TCOLUMN_DEFAULTS.keys.include? k }
+          opt = Apache::Hadoop::Hbase::Thrift2::TColumn.new(opt)
+          atcolumn << opt
+        end
+        return atcolumn
       end
     end
   end
