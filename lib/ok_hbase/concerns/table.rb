@@ -179,6 +179,10 @@ module OkHbase
       end
 
       def scan2(opts={})
+        
+        raise TypeError.new "'columns' must be a list" if opts[:columns] && !opts[:columns].is_a?(Array)
+        raise TypeError.new "'time_range' must be a list" if opts[:time_range] && !opts[:time_range].is_a?(Array)
+        
         opts[:columns] = _tcolumn(opts[:columns]) rescue nil
         opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
         rows2 = [] unless block_given?
