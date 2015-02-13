@@ -186,18 +186,21 @@ module OkHbase
 
       def scan2(opts={})
 
-        raise TypeError.new "'columns' must be a list" if opts[:columns] && !opts[:columns].is_a?(Array)
-        raise TypeError.new "'time_range' must be a list" if opts[:time_range] && !opts[:time_range].is_a?(Array)
+        opts_input = opts.clone
 
-        opts[:columns] = _tcolumn(opts[:columns]) rescue nil
-        opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
+        raise TypeError.new "'columns' must be a list" if opts_input[:columns] && !opts_input[:columns].is_a?(Array)
+        raise TypeError.new "'time_range' must be a list" if opts_input[:time_range] && !opts_input[:time_range].is_a?(Array)
+
+        opts_input[:columns] = _tcolumn(opts_input[:columns]) rescue nil
+        opts_input[:time_range] = _ttimerange(opts_input[:time_range]) rescue nil
+
         rows2 = [] unless block_given?
-        opts = SCANNER2_DEFAULTS.merge opts.select { |k| SCANNER2_DEFAULTS.keys.include? k }
+        opts_input = SCANNER2_DEFAULTS.merge opts_input.select { |k| SCANNER2_DEFAULTS.keys.include? k }
 
-        raise ArgumentError.new "'caching' must be >= 1" unless opts[:caching] && opts[:caching] >= 1
-        raise ArgumentError.new "'max_versions' must be >= 1" if opts[:max_versions] && opts[:max_versions] < 1
+        raise ArgumentError.new "'caching' must be >= 1" unless opts_input[:caching] && opts_input[:caching] >= 1
+        raise ArgumentError.new "'max_versions' must be >= 1" if opts_input[:max_versions] && opts_input[:max_versions] < 1
 
-        scanner2 = _scanner2(opts)
+        scanner2 = _scanner2(opts_input)
 
         scanner_id = self.connection.client2.openScanner(self.connection.table_name(table_name), scanner2)
 
@@ -205,7 +208,7 @@ module OkHbase
 
         begin
           while true
-            how_many = opts[:max_versions] ? [opts[:caching], opts[:max_versions] - returned_count].min : opts[:caching]
+            how_many = opts_input[:max_versions] ? [opts_input[:caching], opts_input[:max_versions] - returned_count].min : opts_input[:caching]
 
             items = self.connection.client2.getScannerRows(scanner_id, how_many)
 
@@ -216,7 +219,7 @@ module OkHbase
               else
                 rows2 << [item.row, _make_row2(item.columnValues)]
               end
-              return rows2 if opts[:limit] && index + 1 + returned_count == opts[:limit]
+              return rows2 if opts_input[:limit] && index + 1 + returned_count == opts_input[:limit]
             end
 
             break if items.length < how_many
@@ -249,13 +252,16 @@ module OkHbase
 
       def get(opts={})
 
-        raise TypeError.new "'columns' must be a list" if opts[:columns] && !opts[:columns].is_a?(Array)
-        raise TypeError.new "'time_range' must be a list" if opts[:time_range] && !opts[:time_range].is_a?(Array)
+        opts_input = opts.clone
 
-        opts[:columns] = _tcolumn(opts[:columns]) rescue nil
-        opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
-        opts = TGET_DEFAULTS.merge opts.select { |k| TGET_DEFAULTS.keys.include? k }
-        tget = _tget(opts)
+        raise TypeError.new "'columns' must be a list" if opts_input[:columns] && !opts_input[:columns].is_a?(Array)
+        raise TypeError.new "'time_range' must be a list" if opts_input[:time_range] && !opts_input[:time_range].is_a?(Array)
+
+        opts_input[:columns] = _tcolumn(opts_input[:columns]) rescue nil
+        opts_input[:time_range] = _ttimerange(opts_input[:time_range]) rescue nil
+
+        opts_input = TGET_DEFAULTS.merge opts_input.select { |k| TGET_DEFAULTS.keys.include? k }
+        tget = _tget(opts_input)
                 
         item = self.connection.client2.get(self.connection.table_name(table_name), tget)
         if block_given?
@@ -267,21 +273,23 @@ module OkHbase
       end
 
       def gets(opts={})
-
-        raise TypeError.new "'rows' must be a list" if opts[:rows] && !opts[:rows].is_a?(Array)
-        raise TypeError.new "'columns' must be a list" if opts[:columns] && !opts[:columns].is_a?(Array)
-        raise TypeError.new "'time_range' must be a list" if opts[:time_range] && !opts[:time_range].is_a?(Array)
-
-        opts[:columns] = _tcolumn(opts[:columns]) rescue nil
-        opts[:time_range] = _ttimerange(opts[:time_range]) rescue nil
         
-        opts_mod = opts.clone
+        opts_input = opts.clone
+
+        raise TypeError.new "'rows' must be a list" if opts_input[:rows] && !opts_input[:rows].is_a?(Array)
+        raise TypeError.new "'columns' must be a list" if opts_input[:columns] && !opts_input[:columns].is_a?(Array)
+        raise TypeError.new "'time_range' must be a list" if opts_input[:time_range] && !opts_input[:time_range].is_a?(Array)
+        
+        opts_input[:columns] = _tcolumn(opts_input[:columns]) rescue nil
+        opts_input[:time_range] = _ttimerange(opts_input[:time_range]) rescue nil
+        
+        opts_mod = opts_input.clone
         opts_mod[:row] = nil
 
         opts_mod = TGET_DEFAULTS.merge opts_mod.select { |k| TGET_DEFAULTS.keys.include? k }
 
-        ltget = Array.new(opts[:row].count) { opts_mod.clone }
-        opts[:row].map.with_index{ |row, index| ltget[index][:row] = row }
+        ltget = Array.new(opts_input[:row].count) { opts_mod.clone }
+        opts_input[:row].map.with_index{ |row, index| ltget[index][:row] = row }
 
         opts_return = []
         ltget.each do |ltget_single|
