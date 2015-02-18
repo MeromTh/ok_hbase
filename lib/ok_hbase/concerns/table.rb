@@ -34,6 +34,14 @@ module OkHbase
           max_versions: 1
       }.freeze
 
+      TGETS_DEFAULTS = {
+          rows: nil,
+          columns: nil,
+          timestamp: nil,
+          time_range: nil,
+          max_versions: 1
+      }.freeze
+
       TCOLUMN_DEFAULTS = {
           family: nil,
           qualifier: nil,
@@ -286,10 +294,12 @@ module OkHbase
         opts_mod = opts_input.clone
         opts_mod[:rows] = nil
 
-        opts_mod = TGET_DEFAULTS.merge opts_mod.select { |k| TGET_DEFAULTS.keys.include? k }
+        opts_mod = TGETS_DEFAULTS.merge opts_mod.select { |k| TGETS_DEFAULTS.keys.include? k }
 
         ltget = Array.new(opts_input[:rows].count) { opts_mod.clone }
-        opts_input[:rows].map.with_index{ |row, index| ltget[index][:rows] = row }
+        mappings = {"rows" => "row"}
+        Hash[ltget.map {|k, v| [mappings[k], v] }]
+        opts_input[:rows].map.with_index{ |row, index| ltget[index][:row] = row }
 
         opts_return = []
         ltget.each do |ltget_single|
