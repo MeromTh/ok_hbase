@@ -284,12 +284,12 @@ module OkHbase
         opts_input[:time_range] = _ttimerange(opts_input[:time_range]) rescue nil
         
         opts_mod = opts_input.clone
-        opts_mod[:row] = nil
+        opts_mod[:rows] = nil
 
         opts_mod = TGET_DEFAULTS.merge opts_mod.select { |k| TGET_DEFAULTS.keys.include? k }
 
-        ltget = Array.new(opts_input[:row].count) { opts_mod.clone }
-        opts_input[:row].map.with_index{ |row, index| ltget[index][:row] = row }
+        ltget = Array.new(opts_input[:rows].count) { opts_mod.clone }
+        opts_input[:rows].map.with_index{ |row, index| ltget[index][:rows] = row }
 
         opts_return = []
         ltget.each do |ltget_single|
