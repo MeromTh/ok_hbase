@@ -223,9 +223,9 @@ module OkHbase
             fetched_count += items.length
             items.map.with_index do |item, index|
               if block_given?
-                yield item.row, _make_row2(item.columnValues)
+                yield item.row.force_encoding(Encoding::UTF_8), _make_row2(item.columnValues)
               else
-                rows2 << [item.row, _make_row2(item.columnValues)]
+                rows2 << [item.row.force_encoding(Encoding::UTF_8), _make_row2(item.columnValues)]
               end
               return rows2 if opts_input[:limit] && index + 1 + returned_count == opts_input[:limit]
             end
@@ -310,9 +310,9 @@ module OkHbase
         rows = []
         items.map.with_index do |item, index|
           if block_given?
-            yield item.row, _make_row2(item.columnValues)
+            yield item.row.force_encoding(Encoding::UTF_8), _make_row2(item.columnValues)
           else
-            rows << [item.row, _make_row2(item.columnValues)]
+            rows << [item.row.force_encoding(Encoding::UTF_8), _make_row2(item.columnValues)]
           end
         end
         rows
@@ -401,7 +401,7 @@ module OkHbase
       def _make_row2(cell_maps)
         row = []
         cell_maps.each do |cell_map|
-          row << {family: cell_map.family, qualifier: cell_map.qualifier, value: cell_map.value, timestamp: cell_map.timestamp}
+          row << {family: cell_map.family.force_encoding(Encoding::UTF_8), qualifier: cell_map.qualifier.force_encoding(Encoding::UTF_8), value: cell_map.value.force_encoding(Encoding::UTF_8), timestamp: cell_map.timestamp}
         end
         row
       end
