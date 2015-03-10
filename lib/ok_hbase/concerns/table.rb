@@ -222,10 +222,11 @@ module OkHbase
 
             fetched_count += items.length
             items.map.with_index do |item, index|
+              item.row = item.row.force_encoding(Encoding::UTF_8).clone rescue nil
               if block_given?
-                yield item.row.force_encoding(Encoding::UTF_8), _make_row2(item.columnValues)
+                yield item.row, _make_row2(item.columnValues)
               else
-                rows2 << [item.row.force_encoding(Encoding::UTF_8), _make_row2(item.columnValues)]
+                rows2 << [item.row, _make_row2(item.columnValues)]
               end
               return rows2 if opts_input[:limit] && index + 1 + returned_count == opts_input[:limit]
             end
@@ -309,10 +310,11 @@ module OkHbase
         
         rows = []
         items.map.with_index do |item, index|
+          item.row = item.row.force_encoding(Encoding::UTF_8).clone rescue nil
           if block_given?
-            yield item.row.force_encoding(Encoding::UTF_8), _make_row2(item.columnValues)
+            yield item.row, _make_row2(item.columnValues)
           else
-            rows << [item.row.force_encoding(Encoding::UTF_8), _make_row2(item.columnValues)]
+            rows << [item.row, _make_row2(item.columnValues)]
           end
         end
         rows
