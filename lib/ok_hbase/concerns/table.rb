@@ -273,6 +273,7 @@ module OkHbase
         tget = _tget(opts_input)
                 
         item = self.connection.client2.get(self.connection.table_name(table_name), tget)
+        item.row = item.row.force_encoding(Encoding::UTF_8).clone rescue nil
         if block_given?
           yield item.row, _make_row2(item.columnValues)
         else
