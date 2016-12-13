@@ -19,5 +19,5 @@ Gem::Specification.new do |gem|
 
 
   gem.add_dependency 'thrift', '~>0.9.2.0'
-  gem.add_dependency 'activesupport'
+  gem.add_dependency 'activesupport', '~>4.2.7.1'
 end
